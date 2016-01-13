@@ -46,8 +46,6 @@ int main(int argc, char** argv) {
     const int localAutomatSize = parser.get("n").asInt();
     const int iterationsThreshold = parser.get("t").asInt();
     const string outFile = parser.get("o").asString();
-    
-	srand(time(0));
 
 	//-----------------------------------------------------------------------------
 
