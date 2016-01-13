@@ -46,6 +46,7 @@ int main(int argc, char** argv) {
     const int localAutomatSize = parser.get("n").asInt();
     const int iterationsThreshold = parser.get("t").asInt();
     const string outFile = parser.get("o").asString();
+    const string statFile = parser.get("s").asString();
 
 	//-----------------------------------------------------------------------------
 
@@ -88,17 +89,29 @@ int main(int argc, char** argv) {
     }
 
     const double endTime = MPI_Wtime();
-    
+
     if (rank == MASTER) {
+        auto printHeader = [argc, argv, commSize](ofstream& str) {
+            str << "-----------------------TASK 2-----------------------\n";
+            for (int i = 0; i < argc; ++i) {
+                str << argv[i] << " ";
+            }
+            str << "on " << to_string(commSize) << " procs.\n\n";
+        };
+
+        ofstream statStr(statFile.empty() ? "stat.txt" : statFile, ofstream::out);
+        printHeader(statStr);
+        statStr << "TOTAL TIME: " << endTime - startTime << "\n";
+        statStr << "----------------------------------------------------\n\n";
+        statStr.close();
+
         ofstream oStr(outFile.empty() ? "output.txt" : outFile, ofstream::out);
         printSate(state, oStr);
-        
         for (int i = 1; i < commSize; ++i) {
             MPICHECK(MPI_Recv(&state[0], state.size(), MPI_CHAR, i, 0, MPI_COMM_WORLD, &status));
             printSate(state, oStr);
         }
-        
-        oStr << "\n";
+        oStr << "\n\n";
         oStr.close();
     } else {
         MPICHECK(MPI_Send(&state[0], state.size(), MPI_CHAR, MASTER, 0, MPI_COMM_WORLD));
