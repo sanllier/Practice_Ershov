@@ -44,6 +44,28 @@ void alignLoad(string& state, int prev, int next) {
     state = state.substr(c, len - c).append(temp);
 }
 
+void printStat(const string& state, int commSize, ostream* oStr) {
+    MPI_Status status;
+
+    if (oStr != 0) {
+        long long sum = state.length();
+        vector<int> lens(commSize, 0);
+        lens[0] = state.length();
+
+        for (int i = 1; i < commSize; ++i) {
+            MPICHECK(MPI_Recv(&lens[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD, &status));
+            sum += lens[i];
+        }
+
+        for (int i = 0; i < commSize; ++i) {
+            (*oStr) << float(lens[i]) / float(sum) << ", ";
+        }
+    } else {
+        const int localLen = state.length();
+        MPICHECK(MPI_Send(&localLen, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD));   
+    }
+}
+
 void updateStateLOne(string& state) {
     string temp = "";
 
@@ -94,6 +116,7 @@ int main(int argc, char** argv) {
     const int balanceStep = parser.get("k").asInt();
     const int test = parser.get("t").asInt();
     const string outFile = parser.get("o").asString();
+    const string statFile = parser.get("s").asString();
 
     srand(time(0));
 
@@ -112,21 +135,39 @@ int main(int argc, char** argv) {
 
     string state = "";
     if (rank == commSize / 2) { state = "a"; }
-  
+
+    ofstream *oStr = 0;
+    if (rank == MASTER) {
+        oStr = new ofstream(statFile.empty() ? "stat.txt" : statFile, ofstream::out);
+    }
+
     //-----------------------------------------------------------------------------
 
     const double startTime = MPI_Wtime();
 
     for (int i = 1; i <= iterationsThreshold; ++i) {
+        if (i % 100 == 0 && rank == MASTER) {
+            cout << i << "/" << iterationsThreshold << "\n";
+        }
+
         updateState(state, test);
 
         if (i % balanceStep == 0) {
+            if (rank == MASTER) (*oStr) << i << ", ";
+            printStat(state, commSize, oStr);
+            if (rank == MASTER) (*oStr) << "\n";
+
             alignLoad(state, prevProcRank, nextProcRank);
         }
     }
 
     const double endTime = MPI_Wtime();
     
+    if (rank == MASTER) {
+        oStr->close();
+        delete oStr;
+    }
+
     MPI_Status status;
 
     if (rank == MASTER) {
